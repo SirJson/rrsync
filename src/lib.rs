@@ -11,10 +11,12 @@
 
 extern crate cdchunking;
 extern crate chrono;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate rusqlite;
 extern crate sha1;
-#[cfg(test)] extern crate tempfile;
+#[cfg(test)]
+extern crate tempfile;
 
 mod index;
 pub mod locations;
@@ -156,7 +158,7 @@ mod tests {
         let digest = HashDigest(sha1.digest().bytes());
 
         let hash = <HashDigest as FromSql>::column_result(ValueRef::Text(
-            "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3",
+            "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3".as_bytes(),
         ));
         assert_eq!(hash.unwrap(), digest);
     }

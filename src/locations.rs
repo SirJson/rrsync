@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use crate::Error;
-use crate::sync::{SinkWrapper, SourceWrapper};
 use crate::sync::fs::{FsSinkWrapper, FsSourceWrapper};
+use crate::sync::{SinkWrapper, SourceWrapper};
+use crate::Error;
 
 /// SSH remote path, with user and host
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

@@ -1,7 +1,7 @@
 use cdchunking::{ChunkInput, Chunker, ZPAQ};
 use rusqlite;
-use rusqlite::{Connection, Transaction};
 use rusqlite::types::ToSql;
+use rusqlite::{Connection, Transaction};
 use sha1::Sha1;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -47,18 +47,19 @@ fn get_block(
         ",
     )?;
     let mut rows = stmt.query(&[hash as &dyn ToSql])?;
-    if let Some(row) = rows.next() {
-        let row = row?;
-        let path: String = row.get(0);
-        let path: PathBuf = path.into();
-        let offset: i64 = row.get(1);
-        let offset = offset as usize;
-        let size: i64 = row.get(2);
-        let size = size as usize;
-        Ok(Some((path, offset, size)))
-    } else {
-        Ok(None)
+    if let Ok(row) = rows.next() {
+        if row.is_some() {
+            let row = row.unwrap();
+            let path: String = row.get(0)?;
+            let path: PathBuf = path.into();
+            let offset: i64 = row.get(1)?;
+            let offset = offset as usize;
+            let size: i64 = row.get(2)?;
+            let size = size as usize;
+            return Ok(Some((path, offset, size)));
+        }
     }
+    Ok(None)
 }
 
 /// Index of files and blocks
@@ -128,43 +129,46 @@ impl<'a> IndexTransaction<'a> {
             ",
         )?;
         let mut rows = stmt.query(&[name.to_str().expect("encoding")])?;
-        if let Some(row) = rows.next() {
-            let row = row?;
-            let file_id: u32 = row.get(0);
-            let old_modified: chrono::DateTime<chrono::Utc> = row.get(1);
-            if old_modified != modified {
-                info!("Resetting file {:?}, modified", name);
-                // Delete blocks
-                self.tx.execute(
-                    "
-                    DELETE FROM blocks WHERE file_id = ?;
-                    ",
-                    &[&file_id],
-                )?;
-                // Update modification time
-                self.tx.execute(
-                    "
-                    UPDATE files SET modified = ? WHERE file_id = ?;
-                    ",
-                    &[&modified as &dyn ToSql, &file_id],
-                )?;
-                Ok((file_id, false))
-            } else {
-                debug!("File {:?} up to date", name);
-                Ok((file_id, true))
+        if let Ok(row) = rows.next() {
+            if row.is_some() {
+                let data = row.unwrap();
+                let file_id: u32 = data.get(0)?;
+                let old_modified: chrono::DateTime<chrono::Utc> =
+                    data.get(1)?;
+                if old_modified != modified {
+                    info!("Resetting file {:?}, modified", name);
+                    // Delete blocks
+                    self.tx.execute(
+                        "
+                        DELETE FROM blocks WHERE file_id = ?;
+                        ",
+                        &[&file_id],
+                    )?;
+                    // Update modification time
+                    self.tx.execute(
+                        "
+                        UPDATE files SET modified = ? WHERE file_id = ?;
+                        ",
+                        &[&modified as &dyn ToSql, &file_id],
+                    )?;
+                    return Ok((file_id, false));
+                } else {
+                    debug!("File {:?} up to date", name);
+                    return Ok((file_id, true));
+                }
             }
-        } else {
-            info!("Inserting new file {:?}", name);
-            self.tx.execute(
-                "
+        }
+        // No data available, might as well create some
+        info!("Inserting new file {:?}", name);
+        self.tx.execute(
+            "
                 INSERT INTO files(name, modified)
                 VALUES(?, ?);
                 ",
-                &[&name.to_str().expect("encoding") as &dyn ToSql, &modified],
-            )?;
-            let file_id = self.tx.last_insert_rowid();
-            Ok((file_id as u32, false))
-        }
+            &[&name.to_str().expect("encoding") as &dyn ToSql, &modified],
+        )?;
+        let file_id = self.tx.last_insert_rowid();
+        Ok((file_id as u32, false))
     }
 
     /// Replace file in the index
@@ -182,37 +186,38 @@ impl<'a> IndexTransaction<'a> {
             ",
         )?;
         let mut rows = stmt.query(&[name.to_str().expect("encoding")])?;
-        if let Some(row) = rows.next() {
-            let row = row?;
-            let file_id: u32 = row.get(0);
-            info!("Resetting file {:?}", name);
-            // Delete blocks
-            self.tx.execute(
-                "
+        if let Ok(row) = rows.next() {
+            if row.is_some() {
+                let row = row.unwrap();
+                let file_id: u32 = row.get(0)?;
+                info!("Resetting file {:?}", name);
+                // Delete blocks
+                self.tx.execute(
+                    "
                 DELETE FROM blocks WHERE file_id = ?;
                 ",
-                &[&file_id],
-            )?;
-            // Update modification time
-            self.tx.execute(
-                "
+                    &[&file_id],
+                )?;
+                // Update modification time
+                self.tx.execute(
+                    "
                 UPDATE files SET modified = ? WHERE file_id = ?;
                 ",
-                &[&modified as &dyn ToSql, &file_id],
-            )?;
-            Ok(file_id)
-        } else {
-            info!("Inserting new file {:?}", name);
-            self.tx.execute(
-                "
+                    &[&modified as &dyn ToSql, &file_id],
+                )?;
+                return Ok(file_id);
+            }
+        }
+        info!("Inserting new file {:?}", name);
+        self.tx.execute(
+            "
                 INSERT INTO files(name, modified)
                 VALUES(?, ?);
                 ",
-                &[&name.to_str().expect("encoding") as &dyn ToSql, &modified],
-            )?;
-            let file_id = self.tx.last_insert_rowid();
-            Ok(file_id as u32)
-        }
+            &[&name.to_str().expect("encoding") as &dyn ToSql, &modified],
+        )?;
+        let file_id = self.tx.last_insert_rowid();
+        Ok(file_id as u32)
     }
 
     /// Remove a file and all its blocks from the index
@@ -282,12 +287,12 @@ impl<'a> IndexTransaction<'a> {
         let mut results = Vec::new();
         loop {
             match rows.next() {
-                Some(Ok(row)) => {
-                    let path: String = row.get(1);
-                    results.push((row.get(0), path.into(), row.get(2)))
+                Ok(Some(row)) => {
+                    let path: String = row.get(1)?;
+                    results.push((row.get(0)?, path.into(), row.get(2)?))
                 }
-                Some(Err(e)) => return Err(e.into()),
-                None => break,
+                Err(e) => return Err(e.into()),
+                Ok(None) => break,
             }
         }
         Ok(results)
@@ -352,13 +357,13 @@ impl<'a> IndexTransaction<'a> {
         let mut results = Vec::new();
         loop {
             match rows.next() {
-                Some(Ok(row)) => {
-                    let offset: i64 = row.get(1);
-                    let size: i64 = row.get(2);
-                    results.push((row.get(0), offset as usize, size as usize))
+                Ok(Some(row)) => {
+                    let offset: i64 = row.get(1)?;
+                    let size: i64 = row.get(2)?;
+                    results.push((row.get(0)?, offset as usize, size as usize))
                 }
-                Some(Err(e)) => return Err(e.into()),
-                None => break,
+                Ok(None) => break,
+                Err(e) => return Err(e.into()),
             }
         }
         Ok(results)
@@ -379,15 +384,14 @@ impl<'a> IndexTransaction<'a> {
         name: &Path,
     ) -> Result<(), Error> {
         let file = File::open(path)?;
-        let (file_id, up_to_date) = self.add_file(
-            name,
-            file.metadata()?.modified()?.into(),
-        )?;
+        let (file_id, up_to_date) =
+            self.add_file(name, file.metadata()?.modified()?.into())?;
         if !up_to_date {
             // Use ZPAQ to cut the stream into blocks
             let chunker = Chunker::new(
                 ZPAQ::new(ZPAQ_BITS), // 13 bits = 8 KiB block average
-            ).max_size(MAX_BLOCK_SIZE);
+            )
+            .max_size(MAX_BLOCK_SIZE);
             let mut chunk_iterator = chunker.stream(file);
             let mut start_offset = 0;
             let mut offset = 0;
@@ -471,8 +475,8 @@ mod tests {
     use std::path::Path;
     use tempfile::NamedTempFile;
 
-    use crate::HashDigest;
     use super::{Index, MAX_BLOCK_SIZE};
+    use crate::HashDigest;
 
     #[test]
     fn test() {

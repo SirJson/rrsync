@@ -25,8 +25,8 @@ pub mod fs;
 
 use std::path::{Path, PathBuf};
 
-use crate::{Error, HashDigest};
 use crate::index::IndexTransaction;
+use crate::{Error, HashDigest};
 
 /// The sink, representing where the files are being sent.
 ///

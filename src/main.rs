@@ -1,14 +1,14 @@
-extern crate clap;
-extern crate env_logger;
-extern crate rrsync;
+use clap;
+use env_logger;
+use rrsync;
 
 use clap::{App, Arg, SubCommand};
 use std::env;
 use std::path::Path;
 
-use rrsync::{Error, Index};
 use rrsync::locations::Location;
 use rrsync::sync::do_sync;
+use rrsync::{Error, Index};
 
 /// Command-line entrypoint
 fn main() {
@@ -27,11 +27,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("index")
                 .about("Index a file or directory")
-                .arg(
-                    Arg::with_name("path")
-                        .required(true)
-                        .takes_value(true),
-                )
+                .arg(Arg::with_name("path").required(true).takes_value(true))
                 .arg(
                     Arg::with_name("index-file")
                         .short("x")
@@ -42,11 +38,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("sync")
                 .about("Copy files")
-                .arg(
-                    Arg::with_name("source")
-                        .required(true)
-                        .takes_value(true),
-                )
+                .arg(Arg::with_name("source").required(true).takes_value(true))
                 .arg(
                     Arg::with_name("destination")
                         .required(true)
@@ -74,9 +66,7 @@ fn main() {
                      the receiver process",
                 )
                 .arg(
-                    Arg::with_name("source")
-                        .required(true)
-                        .takes_value(true),
+                    Arg::with_name("source").required(true).takes_value(true),
                 ),
         );
 

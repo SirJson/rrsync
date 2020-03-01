@@ -6,6 +6,8 @@ description = "rsync/rdiff/zsync clone"
 repository = "https://github.com/remram44/rrsync"
 documentation = "https://docs.rs/rrsync/"
 license = "BSD-3-Clause"
+edition = "2018"
+
 
 [[bin]]
 name = "rrsync"
@@ -17,7 +19,7 @@ chrono = "0.4"
 clap = "2"
 log = "0.4"
 env_logger = { version = "0.7", default-features = false, features = ["termcolor", "atty", "humantime"] }
-rusqlite = { version = "0.16", features = ["chrono"] }
+rusqlite = { version = "0.21", features = ["chrono", "bundled"] }
 sha1 = "0.6"
 
 [dev-dependencies]

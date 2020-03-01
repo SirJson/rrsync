@@ -2,17 +2,17 @@
 
 use cdchunking::{Chunker, ZPAQ};
 use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::collections::hash_map::{Entry, HashMap};
+use std::collections::VecDeque;
 use std::fs::{DirBuilder, File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
 use std::ops::Not;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use crate::{Error, HashDigest};
-use crate::index::{MAX_BLOCK_SIZE, ZPAQ_BITS, Index, IndexTransaction};
+use crate::index::{Index, IndexTransaction, MAX_BLOCK_SIZE, ZPAQ_BITS};
 use crate::sync::{IndexEvent, Sink, SinkWrapper, Source, SourceWrapper};
+use crate::{Error, HashDigest};
 
 struct TempFile {
     file: File,
@@ -33,9 +33,7 @@ impl TempFile {
 fn read_block(path: &Path, offset: usize) -> Result<Vec<u8>, Error> {
     let mut file = File::open(path)?;
     file.seek(SeekFrom::Start(offset as u64))?;
-    let chunker = Chunker::new(
-        ZPAQ::new(ZPAQ_BITS),
-    ).max_size(MAX_BLOCK_SIZE);
+    let chunker = Chunker::new(ZPAQ::new(ZPAQ_BITS)).max_size(MAX_BLOCK_SIZE);
     let block = chunker.whole_chunks(file).next().unwrap()?;
     Ok(block)
 }
@@ -159,9 +157,8 @@ impl<'a> Sink for FsSink<'a> {
         hash: &HashDigest,
         size: usize,
     ) -> Result<(), Error> {
-        let &mut (ref mut offset, ref mut file) = &mut self.current_file
-            .as_mut()
-            .ok_or_else(|| {
+        let &mut (ref mut offset, ref mut file) =
+            &mut self.current_file.as_mut().ok_or_else(|| {
                 Error::Io(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
                     "Got a block before any file",
@@ -170,7 +167,9 @@ impl<'a> Sink for FsSink<'a> {
 
         info!(
             "Next block: {} for {:?} offset={}",
-            hash, file.borrow().name, *offset,
+            hash,
+            file.borrow().name,
+            *offset,
         );
 
         // We need to write this block to the current file
@@ -178,10 +177,8 @@ impl<'a> Sink for FsSink<'a> {
             // We know where to get it, copy it from there
             Some((name, read_offset, _size)) => {
                 info!("Getting block from {:?} offset={}", name, read_offset);
-                let block = read_block(
-                    &self.root_dir.join(name),
-                    read_offset,
-                )?;
+                let block =
+                    read_block(&self.root_dir.join(name), read_offset)?;
                 write_block(&mut file.borrow_mut().file, *offset, &block)?;
                 self.index.replace_block(
                     &hash,
@@ -231,10 +228,14 @@ impl<'a> Sink for FsSink<'a> {
         if let Some(destinations) = self.waiting_blocks.remove(hash) {
             info!("Got block {}", hash);
             for destination in destinations.into_iter() {
-                let BlockDestination { temp_file: file, offset } = destination;
+                let BlockDestination {
+                    temp_file: file,
+                    offset,
+                } = destination;
                 info!(
                     "Writing block to {:?} offset={}",
-                    file.borrow().name, offset,
+                    file.borrow().name,
+                    offset,
                 );
                 write_block(&mut file.borrow_mut().file, offset, block)?;
                 self.index.replace_block(
