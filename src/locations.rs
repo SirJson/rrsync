@@ -15,6 +15,10 @@ pub struct SshLocation {
     pub host: String,
     /// Path on the remote machine (may be relative to home)
     pub path: String,
+    /// Password
+    pub password: Option<String>,
+    pub private_key: PathBuf,
+    pub public_key Option<PathBuf>
 }
 
 /// A location, possible remote, that can be specified by the user
@@ -34,18 +38,18 @@ impl Location {
         if s.starts_with("http://") || s.starts_with("https://") {
             Some(Location::Http(s.into()))
         } else if s.starts_with("ssh://") {
-            let idx_colon = match s[6 ..].find(':') {
+            let idx_colon = match s[6..].find(':') {
                 Some(i) => i + 6,
                 None => return None,
             };
-            let (user, host) = match s[6 ..].find('@') {
+            let (user, host) = match s[6..].find('@') {
                 Some(idx_at) if idx_at + 6 < idx_colon => {
                     let idx_at = idx_at + 6;
-                    (Some(&s[6 .. idx_at]), &s[idx_at + 1 .. idx_colon])
+                    (Some(&s[6..idx_at]), &s[idx_at + 1..idx_colon])
                 }
-                _ => (None, &s[6 .. idx_colon]),
+                _ => (None, &s[6..idx_colon]),
             };
-            let path = &s[idx_colon + 1 ..];
+            let path = &s[idx_colon + 1..];
 
             Some(Location::Ssh(SshLocation {
                 user: user.map(Into::into),
@@ -54,12 +58,12 @@ impl Location {
             }))
         } else if s.starts_with("file:///") {
             // FIXME: Unquote path?
-            Some(Location::Local(s[7 ..].into()))
+            Some(Location::Local(s[7..].into()))
         } else {
             // Return None if starts with [a-z]+:/
             for (i, c) in s.char_indices() {
                 if c == ':' {
-                    if i > 0 && &s[i + 1 .. i + 2] == "/" {
+                    if i > 0 && &s[i + 1..i + 2] == "/" {
                         return None;
                     }
                 } else if !c.is_ascii_alphabetic() {
@@ -91,7 +95,7 @@ impl Location {
     pub fn open_source(&self) -> Result<Box<dyn SourceWrapper>, Error> {
         let w = match self {
             Location::Local(path) => Box::new(FsSourceWrapper::new(path)?),
-            Location::Ssh(_ssh) => unimplemented!(), // TODO: SSH
+            Location::Ssh(ssh) => Box::new(SshSourceWrapper::new(ssh)?), // TODO: SSH
             Location::Http(_url) => unimplemented!(), // TODO: HTTP
         };
         Ok(w)
